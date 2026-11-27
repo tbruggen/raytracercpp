@@ -1,8 +1,12 @@
+#include <fstream>
 #include <iostream>
 #include <memory>
+#include <string>
+#include <vector>
 
 #include "rtweekend.h"
 #include "color.h"
+#include "png.h"
 #include "ray.h"
 #include "hittable_list.h"
 #include "material.h"
@@ -45,7 +49,9 @@ hittable_list world_scene() {
 }
 
 
-int main() {
+int main(int argc, char* argv[]) {
+
+    std::string out_path = (argc > 1) ? argv[1] : "out.png";
 
         // Image
     const auto aspect_ratio = 16.0 / 9.0;
@@ -69,9 +75,9 @@ int main() {
     auto vertical = vec3(0, viewport_height, 0);
     auto lower_left_corner = origin - horizontal/2 - vertical/2 - vec3(0, 0, focal_length);
 
-    // Render
+    // Render into a pixel buffer, top row first
 
-    std::cout << "P3\n" << image_width << " " << image_height << "\n255\n";
+    std::vector<color> pixels(image_width * image_height);
 
     for (int j = image_height-1; j >= 0; --j) {
         std::cerr << "\rScanlines remaining: " << j << ' ' << std::flush;
@@ -83,9 +89,23 @@ int main() {
                 ray r(origin, lower_left_corner + u*horizontal + v*vertical - origin);
                 pixel_color += ray_color(r, world, max_depth);
             }
-            write_color(std::cout, pixel_color, samples_per_pixel);
+            pixels[(image_height-1-j)*image_width + i] = pixel_color;
         }
     }
 
-    std::cerr << "\nDone.\n";
+    // Write the image file
+
+    if (out_path.size() >= 4 && out_path.compare(out_path.size()-4, 4, ".ppm") == 0) {
+        std::ofstream out(out_path);
+        out << "P3\n" << image_width << " " << image_height << "\n255\n";
+        for (const auto& p : pixels)
+            write_color(out, p, samples_per_pixel);
+    } else {
+        if (!write_png(out_path, image_width, image_height, pixels, samples_per_pixel)) {
+            std::cerr << "\nFailed to write " << out_path << "\n";
+            return 1;
+        }
+    }
+
+    std::cerr << "\nWrote " << out_path << " (" << image_width << "x" << image_height << ")\n";
 }
